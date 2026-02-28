@@ -6,7 +6,7 @@ using VirusTotalScanner.Models;
 
 namespace VirusTotalScanner.Reporting;
 
-internal class CsvExporter : ICsvExporter
+internal sealed class CsvExporter : ICsvExporter
 {
 	public void Export(List<FileScanResult> results, string outputPath)
 	{

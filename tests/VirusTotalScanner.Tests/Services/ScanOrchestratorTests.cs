@@ -5,7 +5,7 @@ using VirusTotalScanner.Services;
 
 namespace VirusTotalScanner.Tests.Services;
 
-public class ScanOrchestratorTests : IDisposable
+public sealed class ScanOrchestratorTests : IDisposable
 {
 	private readonly Mock<IFileEnumerator> _fileEnumerator = new();
 	private readonly Mock<IFileHasher> _fileHasher = new();

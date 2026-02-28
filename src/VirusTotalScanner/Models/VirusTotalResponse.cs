@@ -2,19 +2,19 @@ using System.Text.Json.Serialization;
 
 namespace VirusTotalScanner.Models;
 
-public class VirusTotalResponse
+public sealed class VirusTotalResponse
 {
 	[JsonPropertyName("data")]
 	public VtData? Data { get; set; }
 }
 
-public class VtData
+public sealed class VtData
 {
 	[JsonPropertyName("attributes")]
 	public VtAttributes? Attributes { get; set; }
 }
 
-public class VtAttributes
+public sealed class VtAttributes
 {
 	[JsonPropertyName("last_analysis_stats")]
 	public VtAnalysisStats? LastAnalysisStats { get; set; }
@@ -23,7 +23,7 @@ public class VtAttributes
 	public Dictionary<string, VtEngineResult>? LastAnalysisResults { get; set; }
 }
 
-public class VtAnalysisStats
+public sealed class VtAnalysisStats
 {
 	[JsonPropertyName("malicious")]
 	public int Malicious { get; set; }
@@ -50,7 +50,7 @@ public class VtAnalysisStats
 	public int TypeUnsupported { get; set; }
 }
 
-public class VtEngineResult
+public sealed class VtEngineResult
 {
 	[JsonPropertyName("category")]
 	public string Category { get; set; } = string.Empty;

@@ -2,7 +2,7 @@ using System.Security.Cryptography;
 
 namespace VirusTotalScanner.Services;
 
-internal class FileHasher : IFileHasher
+internal sealed class FileHasher : IFileHasher
 {
 	public async Task<string> ComputeSha256Async(string filePath)
 	{

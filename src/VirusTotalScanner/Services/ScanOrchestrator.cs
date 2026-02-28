@@ -3,7 +3,7 @@ using VirusTotalScanner.Reporting;
 
 namespace VirusTotalScanner.Services;
 
-internal class ScanOrchestrator : IScanOrchestrator
+internal sealed class ScanOrchestrator : IScanOrchestrator
 {
 	private readonly IFileEnumerator _fileEnumerator;
 	private readonly IFileHasher _fileHasher;

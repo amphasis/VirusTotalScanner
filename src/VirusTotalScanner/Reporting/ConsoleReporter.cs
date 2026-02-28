@@ -2,7 +2,7 @@ using VirusTotalScanner.Models;
 
 namespace VirusTotalScanner.Reporting;
 
-internal class ConsoleReporter : IConsoleReporter
+internal sealed class ConsoleReporter : IConsoleReporter
 {
 	public void ReportProgress(int current, int total, string fileName)
 	{

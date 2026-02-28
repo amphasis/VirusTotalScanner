@@ -1,4 +1,4 @@
-using CommandLine;
+﻿using CommandLine;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using VirusTotalScanner;
@@ -58,7 +58,7 @@ static async Task<int> runAsync(Options opts)
 		return httpClient;
 	});
 
-	using var serviceProvider = services.BuildServiceProvider();
+	await using var serviceProvider = services.BuildServiceProvider();
 
 	var orchestrator = serviceProvider.GetRequiredService<IScanOrchestrator>();
 	var results = await orchestrator.ScanAsync(opts.Path);

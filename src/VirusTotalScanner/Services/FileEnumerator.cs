@@ -1,6 +1,6 @@
 namespace VirusTotalScanner.Services;
 
-internal class FileEnumerator : IFileEnumerator
+internal sealed class FileEnumerator : IFileEnumerator
 {
 	public IEnumerable<string> EnumerateFiles(string path)
 	{

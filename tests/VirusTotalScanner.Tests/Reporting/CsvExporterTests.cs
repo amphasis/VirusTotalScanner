@@ -3,7 +3,7 @@ using VirusTotalScanner.Reporting;
 
 namespace VirusTotalScanner.Tests.Reporting;
 
-public class CsvExporterTests : IDisposable
+public sealed class CsvExporterTests : IDisposable
 {
 	private readonly string _tempDir;
 
@@ -92,7 +92,7 @@ public class CsvExporterTests : IDisposable
 	/// <summary>
 	/// CsvExporter subclass that skips Process.Start for tests
 	/// </summary>
-	private class TestCsvExporter : ICsvExporter
+	private sealed class TestCsvExporter : ICsvExporter
 	{
 		public void Export(List<FileScanResult> results, string outputPath)
 		{

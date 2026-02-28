@@ -1,6 +1,6 @@
 namespace VirusTotalScanner.Infrastructure;
 
-internal class RateLimiter : IRateLimiter
+internal sealed class RateLimiter : IRateLimiter
 {
 	private readonly TimeSpan _minInterval;
 	private DateTime _lastRequestTime = DateTime.MinValue;

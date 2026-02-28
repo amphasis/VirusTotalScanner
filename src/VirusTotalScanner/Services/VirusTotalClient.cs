@@ -5,7 +5,7 @@ using VirusTotalScanner.Models;
 
 namespace VirusTotalScanner.Services;
 
-internal class VirusTotalClient : IVirusTotalClient
+internal sealed class VirusTotalClient : IVirusTotalClient
 {
 	private readonly HttpClient _httpClient;
 	private readonly IRateLimiter _rateLimiter;

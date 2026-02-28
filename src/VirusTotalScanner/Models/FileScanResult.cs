@@ -1,6 +1,6 @@
 namespace VirusTotalScanner.Models;
 
-public class FileScanResult
+public sealed class FileScanResult
 {
 	public string FullPath { get; set; } = string.Empty;
 	public long SizeBytes { get; set; }

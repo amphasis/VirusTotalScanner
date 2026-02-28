@@ -7,7 +7,7 @@ using VirusTotalScanner.Services;
 
 namespace VirusTotalScanner.Tests.Services;
 
-public class VirusTotalClientTests
+public sealed class VirusTotalClientTests
 {
 	private readonly Mock<IRateLimiter> _rateLimiter = new();
 
@@ -16,7 +16,7 @@ public class VirusTotalClientTests
 		_rateLimiter.Setup(r => r.WaitAsync()).Returns(Task.CompletedTask);
 	}
 
-	private VirusTotalClient CreateClient(HttpMessageHandler handler)
+	private VirusTotalClient createClient(HttpMessageHandler handler)
 	{
 		var httpClient = new HttpClient(handler)
 		{
@@ -59,7 +59,7 @@ public class VirusTotalClientTests
 			Content = new StringContent(json)
 		});
 
-		var client = CreateClient(handler);
+		var client = createClient(handler);
 		var result = await client.GetFileReportAsync("abc123");
 
 		Assert.NotNull(result);
@@ -100,7 +100,7 @@ public class VirusTotalClientTests
 			Content = new StringContent(json)
 		});
 
-		var client = CreateClient(handler);
+		var client = createClient(handler);
 		var result = await client.GetFileReportAsync("clean_hash");
 
 		Assert.NotNull(result);
@@ -113,7 +113,7 @@ public class VirusTotalClientTests
 	{
 		var handler = new MockHttpHandler(new HttpResponseMessage(HttpStatusCode.NotFound));
 
-		var client = CreateClient(handler);
+		var client = createClient(handler);
 		var result = await client.GetFileReportAsync("unknown_hash");
 
 		Assert.Null(result);
@@ -144,14 +144,14 @@ public class VirusTotalClientTests
 			return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) };
 		});
 
-		var client = CreateClient(handler);
+		var client = createClient(handler);
 		var result = await client.GetFileReportAsync("rate_limited_hash");
 
 		Assert.NotNull(result);
 		Assert.Equal(2, callCount);
 	}
 
-	private class MockHttpHandler : HttpMessageHandler
+	private sealed class MockHttpHandler : HttpMessageHandler
 	{
 		private readonly Func<HttpResponseMessage> _responseFactory;
 

@@ -2,7 +2,7 @@ using VirusTotalScanner.Services;
 
 namespace VirusTotalScanner.Tests.Services;
 
-public class FileHasherTests
+public sealed class FileHasherTests
 {
 	[Fact]
 	public async Task ComputeSha256Async_KnownContent_ReturnsExpectedHash()
