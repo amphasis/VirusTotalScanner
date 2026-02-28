@@ -1,19 +1,19 @@
 namespace VirusTotalScanner.Services;
 
-public class FileEnumerator : IFileEnumerator
+internal class FileEnumerator : IFileEnumerator
 {
-    public IEnumerable<string> EnumerateFiles(string path)
-    {
-        if (File.Exists(path))
-        {
-            return [Path.GetFullPath(path)];
-        }
+	public IEnumerable<string> EnumerateFiles(string path)
+	{
+		if (File.Exists(path))
+		{
+			return [Path.GetFullPath(path)];
+		}
 
-        if (Directory.Exists(path))
-        {
-            return Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories);
-        }
+		if (Directory.Exists(path))
+		{
+			return Directory.EnumerateFiles(path, "*", SearchOption.AllDirectories);
+		}
 
-        throw new FileNotFoundException($"Path not found: {path}");
-    }
+		throw new FileNotFoundException($"Path not found: {path}");
+	}
 }

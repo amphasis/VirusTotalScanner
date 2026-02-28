@@ -4,5 +4,5 @@ namespace VirusTotalScanner.Reporting;
 
 public interface ICsvExporter
 {
-    void Export(List<FileScanResult> results, string outputPath);
+	void Export(List<FileScanResult> results, string outputPath);
 }

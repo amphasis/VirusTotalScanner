@@ -2,5 +2,5 @@ namespace VirusTotalScanner.Infrastructure;
 
 public interface IRateLimiter
 {
-    Task WaitAsync();
+	Task WaitAsync();
 }
