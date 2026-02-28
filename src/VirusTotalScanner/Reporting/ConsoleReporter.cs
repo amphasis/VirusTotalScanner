@@ -32,6 +32,15 @@ internal sealed class ConsoleReporter : IConsoleReporter
 		Console.ForegroundColor = prevColor;
 	}
 
+	public void ReportSkipped(string fileName, string reason)
+	{
+		Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
+		var prevColor = Console.ForegroundColor;
+		Console.ForegroundColor = ConsoleColor.DarkYellow;
+		Console.WriteLine($"[SKIPPED] {fileName} - {reason}");
+		Console.ForegroundColor = prevColor;
+	}
+
 	public void ReportError(string message)
 	{
 		Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");

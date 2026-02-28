@@ -83,6 +83,33 @@ public sealed class ScanOrchestratorTests : IDisposable
 	}
 
 	[Fact]
+	public async Task ScanAsync_LargeFile_SkipsHashingAndApi()
+	{
+		var filePath = Path.Combine(_tempDir, "large.bin");
+		using (var fs = File.Create(filePath))
+		{
+			fs.SetLength(651L * 1024 * 1024);
+		}
+
+		_fileEnumerator.Setup(f => f.EnumerateFiles("testdir")).Returns(new[] { filePath });
+
+		var results = await _orchestrator.ScanAsync("testdir");
+
+		Assert.Single(results);
+		Assert.Equal("Skipped: file exceeds 650 MB VirusTotal limit", results[0].Threats);
+		Assert.Equal(filePath, results[0].FullPath);
+		Assert.Equal(651L * 1024 * 1024, results[0].SizeBytes);
+		Assert.Equal(string.Empty, results[0].SHA256);
+
+		_fileHasher.Verify(h => h.ComputeSha256Async(It.IsAny<string>()), Times.Never);
+		_vtClient.Verify(c => c.GetFileReportAsync(It.IsAny<string>()), Times.Never);
+		_reporter.Verify(r => r.ReportSkipped(
+			"large.bin",
+			"file exceeds 650 MB VirusTotal limit"), Times.Once);
+		_reporter.Verify(r => r.ReportComplete(1, 0), Times.Once);
+	}
+
+	[Fact]
 	public async Task ScanAsync_EmptyDirectory_ReturnsEmpty()
 	{
 		_fileEnumerator.Setup(f => f.EnumerateFiles("empty")).Returns(Array.Empty<string>());

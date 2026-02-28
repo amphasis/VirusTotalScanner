@@ -8,6 +8,7 @@ public interface IConsoleReporter
 	void ReportDetection(FileScanResult result);
 	void ReportClean(FileScanResult result);
 	void ReportNotFound(string fileName);
+	void ReportSkipped(string fileName, string reason);
 	void ReportError(string message);
 	void ReportComplete(int total, int withDetections);
 }

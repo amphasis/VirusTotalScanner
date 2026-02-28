@@ -5,6 +5,8 @@ namespace VirusTotalScanner.Services;
 
 internal sealed class ScanOrchestrator : IScanOrchestrator
 {
+	private const long MaxFileSizeBytes = 650L * 1024 * 1024;
+
 	private readonly IFileEnumerator _fileEnumerator;
 	private readonly IFileHasher _fileHasher;
 	private readonly IVirusTotalClient _vtClient;
@@ -34,8 +36,21 @@ internal sealed class ScanOrchestrator : IScanOrchestrator
 
 			try
 			{
-				var hash = await _fileHasher.ComputeSha256Async(filePath);
 				var fileInfo = new FileInfo(filePath);
+
+				if (fileInfo.Length > MaxFileSizeBytes)
+				{
+					results.Add(new FileScanResult
+					{
+						FullPath = filePath,
+						SizeBytes = fileInfo.Length,
+						Threats = "Skipped: file exceeds 650 MB VirusTotal limit"
+					});
+					_reporter.ReportSkipped(Path.GetFileName(filePath), "file exceeds 650 MB VirusTotal limit");
+					continue;
+				}
+
+				var hash = await _fileHasher.ComputeSha256Async(filePath);
 
 				var result = await _vtClient.GetFileReportAsync(hash);
 
