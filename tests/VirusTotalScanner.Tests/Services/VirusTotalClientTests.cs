@@ -1,7 +1,5 @@
 using System.Net;
 using System.Text.Json;
-using Moq;
-using VirusTotalScanner.Infrastructure;
 using VirusTotalScanner.Models;
 using VirusTotalScanner.Services;
 
@@ -9,20 +7,13 @@ namespace VirusTotalScanner.Tests.Services;
 
 public sealed class VirusTotalClientTests
 {
-	private readonly Mock<IRateLimiter> _rateLimiter = new();
-
-	public VirusTotalClientTests()
-	{
-		_rateLimiter.Setup(r => r.WaitAsync()).Returns(Task.CompletedTask);
-	}
-
 	private VirusTotalClient createClient(HttpMessageHandler handler)
 	{
 		var httpClient = new HttpClient(handler)
 		{
 			BaseAddress = new Uri("https://www.virustotal.com/api/v3/")
 		};
-		return new VirusTotalClient(httpClient, _rateLimiter.Object);
+		return new VirusTotalClient(httpClient, TimeSpan.Zero);
 	}
 
 	[Fact]

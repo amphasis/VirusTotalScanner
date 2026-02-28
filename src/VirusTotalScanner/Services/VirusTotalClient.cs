@@ -1,6 +1,5 @@
 using System.Net;
 using System.Text.Json;
-using VirusTotalScanner.Infrastructure;
 using VirusTotalScanner.Models;
 
 namespace VirusTotalScanner.Services;
@@ -8,19 +7,17 @@ namespace VirusTotalScanner.Services;
 internal sealed class VirusTotalClient : IVirusTotalClient
 {
 	private readonly HttpClient _httpClient;
-	private readonly IRateLimiter _rateLimiter;
+	private readonly TimeSpan _rateLimitRetryDelay;
 	private const int MaxRetries = 3;
 
-	public VirusTotalClient(HttpClient httpClient, IRateLimiter rateLimiter)
+	public VirusTotalClient(HttpClient httpClient, TimeSpan? rateLimitRetryDelay = null)
 	{
 		_httpClient = httpClient;
-		_rateLimiter = rateLimiter;
+		_rateLimitRetryDelay = rateLimitRetryDelay ?? TimeSpan.FromSeconds(15);
 	}
 
 	public async Task<FileScanResult?> GetFileReportAsync(string sha256)
 	{
-		await _rateLimiter.WaitAsync();
-
 		for (int attempt = 0; attempt <= MaxRetries; attempt++)
 		{
 			try
@@ -32,7 +29,7 @@ internal sealed class VirusTotalClient : IVirusTotalClient
 
 				if (response.StatusCode == (HttpStatusCode)429)
 				{
-					await Task.Delay(TimeSpan.FromSeconds(60));
+					await Task.Delay(_rateLimitRetryDelay);
 					continue;
 				}
 

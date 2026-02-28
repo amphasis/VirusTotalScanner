@@ -2,7 +2,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using VirusTotalScanner;
-using VirusTotalScanner.Infrastructure;
 using VirusTotalScanner.Reporting;
 using VirusTotalScanner.Services;
 
@@ -40,7 +39,6 @@ static async Task<int> runAsync(Options opts)
 	var services = new ServiceCollection();
 
 	services.AddSingleton<IConfiguration>(configuration);
-	services.AddSingleton<IRateLimiter, RateLimiter>();
 	services.AddSingleton<IFileHasher, FileHasher>();
 	services.AddSingleton<IFileEnumerator, FileEnumerator>();
 	services.AddSingleton<IConsoleReporter, ConsoleReporter>();
