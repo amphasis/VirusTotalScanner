@@ -2,7 +2,7 @@
 
 ## Overview
 
-CLI-утилита на .NET 8.0: сканирует файлы/директории, вычисляет SHA-256 хеши, запрашивает VirusTotal API v3 и экспортирует результаты в CSV.
+.NET 8.0 CLI utility: scans files/directories, computes SHA-256 hashes, queries VirusTotal API v3, and exports results to CSV.
 
 ## Project Structure
 
