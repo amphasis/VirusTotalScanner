@@ -8,6 +8,7 @@ namespace VirusTotalScanner.Tests.Services;
 public sealed class ScanOrchestratorTests : IDisposable
 {
 	private readonly Mock<IFileEnumerator> _fileEnumerator = new();
+	private readonly Mock<IFilePrioritizer> _filePrioritizer = new();
 	private readonly Mock<IFileHasher> _fileHasher = new();
 	private readonly Mock<IVirusTotalClient> _vtClient = new();
 	private readonly Mock<IConsoleReporter> _reporter = new();
@@ -16,8 +17,13 @@ public sealed class ScanOrchestratorTests : IDisposable
 
 	public ScanOrchestratorTests()
 	{
+		_filePrioritizer
+			.Setup(p => p.Prioritize(It.IsAny<IEnumerable<string>>()))
+			.Returns((IEnumerable<string> paths) => paths.ToList());
+
 		_orchestrator = new ScanOrchestrator(
 			_fileEnumerator.Object,
+			_filePrioritizer.Object,
 			_fileHasher.Object,
 			_vtClient.Object,
 			_reporter.Object);

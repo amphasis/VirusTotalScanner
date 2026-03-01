@@ -8,17 +8,20 @@ internal sealed class ScanOrchestrator : IScanOrchestrator
 	private const long MaxFileSizeBytes = 650L * 1024 * 1024;
 
 	private readonly IFileEnumerator _fileEnumerator;
+	private readonly IFilePrioritizer _filePrioritizer;
 	private readonly IFileHasher _fileHasher;
 	private readonly IVirusTotalClient _vtClient;
 	private readonly IConsoleReporter _reporter;
 
 	public ScanOrchestrator(
 		IFileEnumerator fileEnumerator,
+		IFilePrioritizer filePrioritizer,
 		IFileHasher fileHasher,
 		IVirusTotalClient vtClient,
 		IConsoleReporter reporter)
 	{
 		_fileEnumerator = fileEnumerator;
+		_filePrioritizer = filePrioritizer;
 		_fileHasher = fileHasher;
 		_vtClient = vtClient;
 		_reporter = reporter;
@@ -26,7 +29,7 @@ internal sealed class ScanOrchestrator : IScanOrchestrator
 
 	public async Task<List<FileScanResult>> ScanAsync(string path)
 	{
-		var files = _fileEnumerator.EnumerateFiles(path).ToList();
+		var files = _filePrioritizer.Prioritize(_fileEnumerator.EnumerateFiles(path));
 		var results = new List<FileScanResult>();
 
 		for (int i = 0; i < files.Count; i++)

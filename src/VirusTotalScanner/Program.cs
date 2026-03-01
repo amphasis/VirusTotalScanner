@@ -41,6 +41,7 @@ static async Task<int> runAsync(Options opts)
 	services.AddSingleton<IConfiguration>(configuration);
 	services.AddSingleton<IFileHasher, FileHasher>();
 	services.AddSingleton<IFileEnumerator, FileEnumerator>();
+	services.AddSingleton<IFilePrioritizer, FilePrioritizer>();
 	services.AddSingleton<IConsoleReporter, ConsoleReporter>();
 	services.AddSingleton<ICsvExporter, CsvExporter>();
 	services.AddSingleton<IVirusTotalClient, VirusTotalClient>();
