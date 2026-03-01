@@ -32,3 +32,5 @@ src/VirusTotalScanner/appsettings.json
 
 ## Scan results
 scan_results_*.csv
+/src/VirusTotalScanner/VirusTotalScanner.lnk
+/src/VirusTotalScanner/Properties/launchSettings.json
