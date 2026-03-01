@@ -111,7 +111,65 @@ public sealed class VirusTotalClientTests
 	}
 
 	[Fact]
-	public async Task GetFileReportAsync_RateLimited_RetriesSuccessfully()
+	public async Task GetFileReportAsync_TooManyRequests_RetriesSuccessfully()
+	{
+		var vtResponse = new VirusTotalResponse
+		{
+			Data = new VtData
+			{
+				Attributes = new VtAttributes
+				{
+					LastAnalysisStats = new VtAnalysisStats { Undetected = 10 },
+					LastAnalysisResults = new Dictionary<string, VtEngineResult>()
+				}
+			}
+		};
+		var successJson = JsonSerializer.Serialize(vtResponse);
+		var errorJson = JsonSerializer.Serialize(new VirusTotalErrorResponse
+		{
+			Error = new VtError { Code = "TooManyRequestsError", Message = "Too many requests" }
+		});
+
+		var callCount = 0;
+		var handler = new MockHttpHandler(() =>
+		{
+			callCount++;
+			if (callCount == 1)
+				return new HttpResponseMessage((HttpStatusCode)429)
+				{
+					Content = new StringContent(errorJson)
+				};
+			return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(successJson) };
+		});
+
+		var client = createClient(handler);
+		var result = await client.GetFileReportAsync("rate_limited_hash");
+
+		Assert.NotNull(result);
+		Assert.Equal(2, callCount);
+	}
+
+	[Fact]
+	public async Task GetFileReportAsync_QuotaExceeded_ThrowsQuotaExceededException()
+	{
+		var errorJson = JsonSerializer.Serialize(new VirusTotalErrorResponse
+		{
+			Error = new VtError { Code = "QuotaExceededError", Message = "Quota exceeded" }
+		});
+
+		var handler = new MockHttpHandler(new HttpResponseMessage((HttpStatusCode)429)
+		{
+			Content = new StringContent(errorJson)
+		});
+
+		var client = createClient(handler);
+
+		await Assert.ThrowsAsync<QuotaExceededException>(
+			() => client.GetFileReportAsync("quota_hash"));
+	}
+
+	[Fact]
+	public async Task GetFileReportAsync_RateLimitedNoBody_RetriesSuccessfully()
 	{
 		var vtResponse = new VirusTotalResponse
 		{

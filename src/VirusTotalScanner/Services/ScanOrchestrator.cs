@@ -86,6 +86,24 @@ internal sealed class ScanOrchestrator : IScanOrchestrator
 			{
 				_reporter.ReportError($"IO error for {filePath}: {ex.Message}");
 			}
+			catch (QuotaExceededException)
+			{
+				_reporter.ReportError("VirusTotal daily quota exceeded, skipping remaining files");
+
+				for (int j = i; j < files.Count; j++)
+				{
+					var skippedPath = files[j];
+					var skippedInfo = new FileInfo(skippedPath);
+					results.Add(new FileScanResult
+					{
+						FullPath = skippedPath,
+						SizeBytes = skippedInfo.Exists ? skippedInfo.Length : 0,
+						Threats = "Skipped: VirusTotal daily quota exceeded"
+					});
+				}
+
+				break;
+			}
 		}
 
 		_reporter.ReportComplete(results.Count, results.Count(r => r.HasDetections));

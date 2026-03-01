@@ -1,4 +1,4 @@
-using System.Net;
+﻿using System.Net;
 using System.Text.Json;
 using VirusTotalScanner.Models;
 
@@ -29,6 +29,11 @@ internal sealed class VirusTotalClient : IVirusTotalClient
 
 				if (response.StatusCode == (HttpStatusCode)429)
 				{
+					var errorCode = await parseErrorCode(response);
+
+					if (errorCode == "QuotaExceededError")
+						throw new QuotaExceededException("VirusTotal daily quota exceeded");
+
 					await Task.Delay(_rateLimitRetryDelay);
 					continue;
 				}
@@ -48,6 +53,20 @@ internal sealed class VirusTotalClient : IVirusTotalClient
 		}
 
 		throw new HttpRequestException($"Failed to get report for {sha256} after {MaxRetries} retries");
+	}
+
+	private static async Task<string?> parseErrorCode(HttpResponseMessage response)
+	{
+		try
+		{
+			var json = await response.Content.ReadAsStringAsync();
+			var errorResponse = JsonSerializer.Deserialize<VirusTotalErrorResponse>(json);
+			return errorResponse?.Error?.Code;
+		}
+		catch (JsonException)
+		{
+			return null;
+		}
 	}
 
 	private static FileScanResult mapToResult(string sha256, VirusTotalResponse? vtResponse)

@@ -110,6 +110,39 @@ public sealed class ScanOrchestratorTests : IDisposable
 	}
 
 	[Fact]
+	public async Task ScanAsync_QuotaExceeded_SkipsRemainingFiles()
+	{
+		var file1 = Path.Combine(_tempDir, "file1.exe");
+		var file2 = Path.Combine(_tempDir, "file2.dll");
+		var file3 = Path.Combine(_tempDir, "file3.txt");
+		File.WriteAllText(file1, "content1");
+		File.WriteAllText(file2, "content2");
+		File.WriteAllText(file3, "content3");
+
+		var files = new[] { file1, file2, file3 };
+		_fileEnumerator.Setup(f => f.EnumerateFiles("testdir")).Returns(files);
+
+		_fileHasher.Setup(h => h.ComputeSha256Async(file1)).ReturnsAsync("hash1");
+
+		_vtClient.Setup(c => c.GetFileReportAsync("hash1"))
+			.ThrowsAsync(new QuotaExceededException("VirusTotal daily quota exceeded"));
+
+		var results = await _orchestrator.ScanAsync("testdir");
+
+		Assert.Equal(3, results.Count);
+		Assert.All(results, r => Assert.Equal("Skipped: VirusTotal daily quota exceeded", r.Threats));
+		Assert.Equal(file1, results[0].FullPath);
+		Assert.Equal(file2, results[1].FullPath);
+		Assert.Equal(file3, results[2].FullPath);
+
+		_fileHasher.Verify(h => h.ComputeSha256Async(file2), Times.Never);
+		_fileHasher.Verify(h => h.ComputeSha256Async(file3), Times.Never);
+		_vtClient.Verify(c => c.GetFileReportAsync("hash1"), Times.Once);
+		_reporter.Verify(r => r.ReportError(It.Is<string>(s => s.Contains("daily quota exceeded"))), Times.Once);
+		_reporter.Verify(r => r.ReportComplete(3, 0), Times.Once);
+	}
+
+	[Fact]
 	public async Task ScanAsync_EmptyDirectory_ReturnsEmpty()
 	{
 		_fileEnumerator.Setup(f => f.EnumerateFiles("empty")).Returns(Array.Empty<string>());
