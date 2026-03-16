@@ -12,22 +12,37 @@ src/VirusTotalScanner/
 ├── Options.cs                  — CLI arguments (CommandLineParser)
 ├── appsettings.json            — Config (API key)
 ├── Models/
-│   ├── FileScanResult.cs       — Result DTO (public sealed)
-│   └── VirusTotalResponse.cs   — API response DTO (public sealed, nested classes)
+│   ├── FileScanResult.cs              — Result DTO (public sealed)
+│   ├── VirusTotalResponse.cs          — API response DTO (public sealed, nested classes)
+│   ├── VirusTotalUploadResponse.cs    — Upload API response DTO
+│   └── VirusTotalAnalysisResponse.cs  — Analysis API response DTO
+├── Cache/
+│   ├── IVirusTotalCacheRepository.cs / VirusTotalCacheRepository.cs  — VT report cache (LiteDB)
+│   ├── IFileHashCacheRepository.cs / FileHashCacheRepository.cs      — SHA-256 hash cache (LiteDB)
+│   ├── IPendingAnalysisRepository.cs / PendingAnalysisRepository.cs  — Pending upload tracking (LiteDB)
+│   ├── VirusTotalCacheEntry.cs        — VT cache entry model
+│   ├── FileHashCacheEntry.cs          — Hash cache entry model
+│   └── PendingAnalysisEntry.cs        — Pending analysis entry model (keyed by SHA256)
 ├── Services/
 │   ├── IFileHasher.cs / FileHasher.cs           — SHA-256 hashing
 │   ├── IFileEnumerator.cs / FileEnumerator.cs   — File/directory enumeration
-│   ├── IVirusTotalClient.cs / VirusTotalClient.cs — VT API client (retry on 429)
-│   └── IScanOrchestrator.cs / ScanOrchestrator.cs — Main scan workflow
+│   ├── IVirusTotalClient.cs / VirusTotalClient.cs — VT API client (report, upload, analysis)
+│   ├── IVirusTotalService.cs / VirusTotalService.cs — Caching layer over VT client
+│   └── IScanOrchestrator.cs / ScanOrchestrator.cs — Two-phase scan workflow
 └── Reporting/
     ├── IConsoleReporter.cs / ConsoleReporter.cs — Console output (colors, progress)
     └── ICsvExporter.cs / CsvExporter.cs         — CSV export (CsvHelper)
 
 tests/VirusTotalScanner.Tests/
+├── Cache/
+│   ├── VirusTotalCacheRepositoryTests.cs  — VT cache CRUD
+│   ├── FileHashCacheRepositoryTests.cs    — Hash cache CRUD
+│   └── PendingAnalysisRepositoryTests.cs  — Pending analysis CRUD
 ├── Services/
 │   ├── FileHasherTests.cs         — SHA-256 verification
-│   ├── VirusTotalClientTests.cs   — API client (mock HTTP, retry logic)
-│   └── ScanOrchestratorTests.cs   — Workflow (all deps mocked)
+│   ├── VirusTotalClientTests.cs   — API client (report, upload, analysis)
+│   ├── VirusTotalServiceTests.cs  — Caching behavior
+│   └── ScanOrchestratorTests.cs   — Two-phase workflow (all deps mocked)
 └── Reporting/
     └── CsvExporterTests.cs        — CSV format verification
 ```
@@ -35,10 +50,12 @@ tests/VirusTotalScanner.Tests/
 ## Architecture
 
 ### Program Flow
-1. Parse CLI args (`--path`, `--api-key`, `--output`) via CommandLineParser
+1. Parse CLI args (`--path`, `--api-key`, `--output`, `--no-upload`) via CommandLineParser
 2. Load config: CLI `--api-key` > `appsettings.json` > error
 3. Register services as singletons in DI container (`Program.cs`)
-4. `ScanOrchestrator.ScanAsync()` → enumerate files → hash → query VT API → report
+4. `ScanOrchestrator.ScanAsync()` runs two phases:
+   - **Phase 1**: enumerate files → hash → query VT API → if not found, check pending repo or upload → report
+   - **Phase 2**: poll all pending analyses until completed or timeout (10 min)
 5. Export results to CSV, optionally open file
 
 ### DI Registration (Program.cs)
@@ -46,9 +63,13 @@ All services registered as singletons. HttpClient configured with base address `
 
 ### Key Behaviors
 - **Retry logic**: Up to 3 retries with exponential backoff (2^attempt seconds)
-- **HTTP 404**: File not in VT database → returns null → synthetic "Not in VT database" result
+- **HTTP 404**: File not in VT database → upload file (unless `--no-upload`) → poll for analysis
 - **HTTP 429**: Rate limited → reactive retry with configurable delay (default 15s)
+- **File upload**: Files ≤32 MB → `POST /files`; files >32 MB → `GET /files/upload_url` then POST
 - **Large files**: Files >650 MB skipped (VirusTotal limit), no hashing or API call
+- **Pending analyses**: Tracked in LiteDB by SHA256; reused across runs to avoid re-uploading
+- **Analysis polling**: 15s between rounds, 10 min max timeout
+- **Not-found caching**: Disabled — null API results are never cached
 - **Errors**: UnauthorizedAccessException/IOException logged, scanning continues
 
 ## Codestyle

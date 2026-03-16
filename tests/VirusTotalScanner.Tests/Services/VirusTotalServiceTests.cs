@@ -91,28 +91,55 @@ public sealed class VirusTotalServiceTests
 	}
 
 	[Fact]
-	public async Task GetFileReportAsync_NotInDatabase_CachedFor1Day()
+	public async Task GetFileReportAsync_NotInDatabase_AlwaysRequeriesApi()
 	{
+		// Old NotInDatabase entries from previous cache versions should always be treated as expired
 		var cached = new VirusTotalCacheEntry
 		{
 			SHA256 = "hash1",
-			CreatedAt = DateTime.UtcNow.AddHours(-23),
+			CreatedAt = DateTime.UtcNow.AddMinutes(-5),
 			NotInDatabase = true
 		};
 		_cacheRepository.Setup(r => r.FindByHash("hash1")).Returns(cached);
+		_vtClient.Setup(c => c.GetFileReportAsync("hash1")).ReturnsAsync((VirusTotalReport?)null);
 
 		var result = await _service.GetFileReportAsync("hash1");
 
 		Assert.Null(result);
-		_vtClient.Verify(c => c.GetFileReportAsync(It.IsAny<string>()), Times.Never);
+		_vtClient.Verify(c => c.GetFileReportAsync("hash1"), Times.Once);
+	}
 
-		// After 1 day it should expire
-		cached.CreatedAt = DateTime.UtcNow.AddDays(-2);
+	[Fact]
+	public async Task GetFileReportAsync_NotFound_DoesNotCache()
+	{
+		_cacheRepository.Setup(r => r.FindByHash("hash1")).Returns((VirusTotalCacheEntry?)null);
 		_vtClient.Setup(c => c.GetFileReportAsync("hash1")).ReturnsAsync((VirusTotalReport?)null);
 
-		result = await _service.GetFileReportAsync("hash1");
+		var result = await _service.GetFileReportAsync("hash1");
 
-		_vtClient.Verify(c => c.GetFileReportAsync("hash1"), Times.Once);
+		Assert.Null(result);
+		_cacheRepository.Verify(r => r.Upsert(It.IsAny<VirusTotalCacheEntry>()), Times.Never);
+	}
+
+	[Fact]
+	public void CacheReport_SavesReportToCache()
+	{
+		var report = new VirusTotalReport
+		{
+			SHA256 = "hash1",
+			TotalEngines = 70,
+			Detections = 2,
+			Threats = "Engine1: Trojan.Gen, Engine2: Malware.AI"
+		};
+
+		_service.CacheReport("hash1", report);
+
+		_cacheRepository.Verify(r => r.Upsert(It.Is<VirusTotalCacheEntry>(e =>
+			e.SHA256 == "hash1" &&
+			e.Detections == 2 &&
+			e.TotalEngines == 70 &&
+			e.Threats.Count == 2 &&
+			!e.NotInDatabase)), Times.Once);
 	}
 
 	[Fact]

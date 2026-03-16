@@ -11,4 +11,9 @@ public interface IConsoleReporter
 	void ReportSkipped(string fileName, string reason);
 	void ReportError(string message);
 	void ReportComplete(int total, int withDetections);
+	void ReportUploading(string fileName);
+	void ReportUploaded(string fileName);
+	void ReportPollingStart(int pendingCount);
+	void ReportPollingProgress(int completed, int total, int round);
+	void ReportAnalysisTimeout(string fileName);
 }

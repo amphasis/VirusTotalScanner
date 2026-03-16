@@ -6,7 +6,6 @@ namespace VirusTotalScanner.Services;
 internal sealed class VirusTotalService : IVirusTotalService
 {
 	private static readonly TimeSpan CleanTtl = TimeSpan.FromDays(30);
-	private static readonly TimeSpan NotFoundTtl = TimeSpan.FromDays(1);
 	private static readonly TimeSpan DetectionTtl = TimeSpan.FromDays(7);
 
 	private readonly IVirusTotalCacheRepository _cacheRepository;
@@ -32,9 +31,10 @@ internal sealed class VirusTotalService : IVirusTotalService
 
 	private static bool isExpired(VirusTotalCacheEntry entry)
 	{
-		var ttl = entry.NotInDatabase ? NotFoundTtl
-			: entry.Detections > 0 ? DetectionTtl
-			: CleanTtl;
+		if (entry.NotInDatabase)
+			return true;
+
+		var ttl = entry.Detections > 0 ? DetectionTtl : CleanTtl;
 
 		return DateTime.UtcNow - entry.CreatedAt > ttl;
 	}
@@ -53,26 +53,31 @@ internal sealed class VirusTotalService : IVirusTotalService
 		};
 	}
 
+	public async Task<string> UploadFileAsync(string filePath)
+	{
+		return await _vtClient.UploadFileAsync(filePath);
+	}
+
+	public void CacheReport(string sha256, VirusTotalReport report)
+	{
+		saveToCache(sha256, report);
+	}
+
 	private void saveToCache(string sha256, VirusTotalReport? result)
 	{
+		if (result == null)
+			return;
+
 		var entry = new VirusTotalCacheEntry
 		{
 			SHA256 = sha256,
 			CreatedAt = DateTime.UtcNow,
-		};
-
-		if (result == null)
-		{
-			entry.NotInDatabase = true;
-		}
-		else
-		{
-			entry.TotalEngines = result.TotalEngines;
-			entry.Detections = result.Detections;
-			entry.Threats = string.IsNullOrEmpty(result.Threats)
+			TotalEngines = result.TotalEngines,
+			Detections = result.Detections,
+			Threats = string.IsNullOrEmpty(result.Threats)
 				? []
-				: result.Threats.Split(", ").ToList();
-		}
+				: result.Threats.Split(", ").ToList()
+		};
 
 		_cacheRepository.Upsert(entry);
 	}

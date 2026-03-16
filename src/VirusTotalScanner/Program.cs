@@ -57,7 +57,9 @@ static async Task<int> runAsync(Options opts)
 	});
 	services.AddSingleton<IFileHashCacheRepository, FileHashCacheRepository>();
 	services.AddSingleton<IVirusTotalCacheRepository, VirusTotalCacheRepository>();
+	services.AddSingleton<IPendingAnalysisRepository, PendingAnalysisRepository>();
 	services.AddSingleton<IVirusTotalService, VirusTotalService>();
+	services.AddSingleton(new ScanOptions { UploadEnabled = !opts.NoUpload });
 	services.AddSingleton<IScanOrchestrator, ScanOrchestrator>();
 
 	services.AddSingleton(_ =>

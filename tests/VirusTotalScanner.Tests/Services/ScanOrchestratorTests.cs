@@ -1,4 +1,5 @@
-﻿using Moq;
+using Moq;
+using VirusTotalScanner.Cache;
 using VirusTotalScanner.Models;
 using VirusTotalScanner.Reporting;
 using VirusTotalScanner.Services;
@@ -11,8 +12,9 @@ public sealed class ScanOrchestratorTests : IDisposable
 	private readonly Mock<IFilePrioritizer> _filePrioritizer = new();
 	private readonly Mock<IFileHasher> _fileHasher = new();
 	private readonly Mock<IVirusTotalService> _vtService = new();
+	private readonly Mock<IVirusTotalClient> _vtClient = new();
+	private readonly Mock<IPendingAnalysisRepository> _pendingAnalysisRepository = new();
 	private readonly Mock<IConsoleReporter> _reporter = new();
-	private readonly ScanOrchestrator _orchestrator;
 	private readonly string _tempDir;
 
 	public ScanOrchestratorTests()
@@ -20,13 +22,6 @@ public sealed class ScanOrchestratorTests : IDisposable
 		_filePrioritizer
 			.Setup(p => p.Prioritize(It.IsAny<IEnumerable<string>>()))
 			.Returns((IEnumerable<string> paths) => paths.ToList());
-
-		_orchestrator = new ScanOrchestrator(
-			_fileEnumerator.Object,
-			_filePrioritizer.Object,
-			_fileHasher.Object,
-			_vtService.Object,
-			_reporter.Object);
 
 		_tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
 		Directory.CreateDirectory(_tempDir);
@@ -38,10 +33,28 @@ public sealed class ScanOrchestratorTests : IDisposable
 			Directory.Delete(_tempDir, true);
 	}
 
+	private ScanOrchestrator createOrchestrator(bool uploadEnabled = true)
+	{
+		var options = new ScanOptions
+		{
+			UploadEnabled = uploadEnabled,
+			PollingInterval = TimeSpan.Zero
+		};
+
+		return new ScanOrchestrator(
+			_fileEnumerator.Object,
+			_filePrioritizer.Object,
+			_fileHasher.Object,
+			_vtService.Object,
+			_vtClient.Object,
+			_pendingAnalysisRepository.Object,
+			_reporter.Object,
+			options);
+	}
+
 	[Fact]
 	public async Task ScanAsync_MixedResults_ReturnsAllResults()
 	{
-		// Create real temp files so FileInfo.Length works
 		var file1 = Path.Combine(_tempDir, "file1.exe");
 		var file2 = Path.Combine(_tempDir, "file2.dll");
 		var file3 = Path.Combine(_tempDir, "file3.txt");
@@ -72,20 +85,111 @@ public sealed class ScanOrchestratorTests : IDisposable
 		});
 		_vtService.Setup(c => c.GetFileReportAsync("hash3")).ReturnsAsync((VirusTotalReport?)null);
 
-		// Act
-		var results = await _orchestrator.ScanAsync("testdir");
+		// file3 not found → upload → returns analysis ID
+		_vtService.Setup(c => c.UploadFileAsync(file3)).ReturnsAsync("analysis-id-3");
 
-		// Assert
+		// polling phase: analysis completes
+		_vtClient.Setup(c => c.GetAnalysisAsync("analysis-id-3")).ReturnsAsync(new VirusTotalReport
+		{
+			SHA256 = "hash3",
+			TotalEngines = 70,
+			Detections = 0,
+			Threats = ""
+		});
+
+		var orchestrator = createOrchestrator();
+		var results = await orchestrator.ScanAsync("testdir");
+
 		Assert.Equal(3, results.Count);
 		Assert.True(results[0].HasDetections);
 		Assert.False(results[1].HasDetections);
-		Assert.Equal("Not in VT database", results[2].Threats);
+		Assert.Equal("hash3", results[2].SHA256);
+		Assert.False(results[2].HasDetections);
 
 		_reporter.Verify(r => r.ReportProgress(It.IsAny<int>(), 3, It.IsAny<string>()), Times.Exactly(3));
 		_reporter.Verify(r => r.ReportDetection(It.IsAny<FileScanResult>()), Times.Once);
-		_reporter.Verify(r => r.ReportClean(It.IsAny<FileScanResult>()), Times.Once);
+		_reporter.Verify(r => r.ReportUploaded(It.IsAny<string>()), Times.Once);
+		_pendingAnalysisRepository.Verify(r => r.Upsert(It.Is<PendingAnalysisEntry>(
+			e => e.SHA256 == "hash3" && e.AnalysisId == "analysis-id-3")), Times.Once);
+		_vtService.Verify(c => c.CacheReport("hash3", It.IsAny<VirusTotalReport>()), Times.Once);
+	}
+
+	[Fact]
+	public async Task ScanAsync_NoUpload_ReturnsNotFound()
+	{
+		var file1 = Path.Combine(_tempDir, "file1.exe");
+		File.WriteAllText(file1, "content1");
+
+		_fileEnumerator.Setup(f => f.EnumerateFiles("testdir")).Returns(new[] { file1 });
+		_fileHasher.Setup(h => h.ComputeSha256Async(file1)).ReturnsAsync("hash1");
+		_vtService.Setup(c => c.GetFileReportAsync("hash1")).ReturnsAsync((VirusTotalReport?)null);
+
+		var orchestrator = createOrchestrator(uploadEnabled: false);
+		var results = await orchestrator.ScanAsync("testdir");
+
+		Assert.Single(results);
+		Assert.Equal("Not in VT database", results[0].Threats);
 		_reporter.Verify(r => r.ReportNotFound(It.IsAny<string>()), Times.Once);
-		_reporter.Verify(r => r.ReportComplete(3, 1), Times.Once);
+		_vtService.Verify(c => c.UploadFileAsync(It.IsAny<string>()), Times.Never);
+	}
+
+	[Fact]
+	public async Task ScanAsync_PendingAnalysisFromPreviousRun_PollsExistingAnalysis()
+	{
+		var file1 = Path.Combine(_tempDir, "file1.exe");
+		File.WriteAllText(file1, "content1");
+
+		_fileEnumerator.Setup(f => f.EnumerateFiles("testdir")).Returns(new[] { file1 });
+		_fileHasher.Setup(h => h.ComputeSha256Async(file1)).ReturnsAsync("hash1");
+		_vtService.Setup(c => c.GetFileReportAsync("hash1")).ReturnsAsync((VirusTotalReport?)null);
+
+		// existing pending entry from previous run
+		_pendingAnalysisRepository.Setup(r => r.FindByHash("hash1"))
+			.Returns(new PendingAnalysisEntry
+			{
+				SHA256 = "hash1",
+				AnalysisId = "old-analysis-id",
+				FilePath = file1,
+				SizeBytes = 8
+			});
+
+		// analysis already completed
+		_vtClient.Setup(c => c.GetAnalysisAsync("old-analysis-id")).ReturnsAsync(new VirusTotalReport
+		{
+			SHA256 = "hash1",
+			TotalEngines = 70,
+			Detections = 1,
+			Threats = "Engine1: Trojan.Gen"
+		});
+
+		var orchestrator = createOrchestrator();
+		var results = await orchestrator.ScanAsync("testdir");
+
+		Assert.Single(results);
+		Assert.True(results[0].HasDetections);
+		_vtService.Verify(c => c.UploadFileAsync(It.IsAny<string>()), Times.Never);
+		_vtService.Verify(c => c.CacheReport("hash1", It.IsAny<VirusTotalReport>()), Times.Once);
+		_pendingAnalysisRepository.Verify(r => r.Remove("hash1"), Times.Once);
+	}
+
+	[Fact]
+	public async Task ScanAsync_UploadFails_ReportsErrorAndContinues()
+	{
+		var file1 = Path.Combine(_tempDir, "file1.exe");
+		File.WriteAllText(file1, "content1");
+
+		_fileEnumerator.Setup(f => f.EnumerateFiles("testdir")).Returns(new[] { file1 });
+		_fileHasher.Setup(h => h.ComputeSha256Async(file1)).ReturnsAsync("hash1");
+		_vtService.Setup(c => c.GetFileReportAsync("hash1")).ReturnsAsync((VirusTotalReport?)null);
+		_vtService.Setup(c => c.UploadFileAsync(file1))
+			.ThrowsAsync(new HttpRequestException("Upload failed after 3 retries"));
+
+		var orchestrator = createOrchestrator();
+		var results = await orchestrator.ScanAsync("testdir");
+
+		Assert.Single(results);
+		Assert.Contains("Upload failed", results[0].Threats);
+		_reporter.Verify(r => r.ReportError(It.Is<string>(s => s.Contains("Upload failed"))), Times.Once);
 	}
 
 	[Fact]
@@ -99,7 +203,8 @@ public sealed class ScanOrchestratorTests : IDisposable
 
 		_fileEnumerator.Setup(f => f.EnumerateFiles("testdir")).Returns(new[] { filePath });
 
-		var results = await _orchestrator.ScanAsync("testdir");
+		var orchestrator = createOrchestrator();
+		var results = await orchestrator.ScanAsync("testdir");
 
 		Assert.Single(results);
 		Assert.Equal("Skipped: file exceeds 650 MB VirusTotal limit", results[0].Threats);
@@ -133,7 +238,8 @@ public sealed class ScanOrchestratorTests : IDisposable
 		_vtService.Setup(c => c.GetFileReportAsync("hash1"))
 			.ThrowsAsync(new QuotaExceededException("VirusTotal daily quota exceeded"));
 
-		var results = await _orchestrator.ScanAsync("testdir");
+		var orchestrator = createOrchestrator();
+		var results = await orchestrator.ScanAsync("testdir");
 
 		Assert.Equal(3, results.Count);
 		Assert.All(results, r => Assert.Equal("Skipped: VirusTotal daily quota exceeded", r.Threats));
@@ -153,7 +259,8 @@ public sealed class ScanOrchestratorTests : IDisposable
 	{
 		_fileEnumerator.Setup(f => f.EnumerateFiles("empty")).Returns(Array.Empty<string>());
 
-		var results = await _orchestrator.ScanAsync("empty");
+		var orchestrator = createOrchestrator();
+		var results = await orchestrator.ScanAsync("empty");
 
 		Assert.Empty(results);
 		_reporter.Verify(r => r.ReportComplete(0, 0), Times.Once);

@@ -12,4 +12,7 @@ internal sealed class Options
 
 	[Option('o', "output", Required = false, HelpText = "Output CSV file path")]
 	public string? Output { get; set; }
+
+	[Option("no-upload", Required = false, Default = false, HelpText = "Disable automatic file upload for files not found in VirusTotal")]
+	public bool NoUpload { get; set; }
 }

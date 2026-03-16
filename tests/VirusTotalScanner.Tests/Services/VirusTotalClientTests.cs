@@ -200,22 +200,151 @@ public sealed class VirusTotalClientTests
 		Assert.Equal(2, callCount);
 	}
 
+	[Fact]
+	public async Task UploadFileAsync_SmallFile_PostsToFilesEndpoint()
+	{
+		var tempFile = Path.GetTempFileName();
+		try
+		{
+			File.WriteAllText(tempFile, "small content");
+
+			var uploadResponse = new { data = new { id = "analysis-123" } };
+			var json = JsonSerializer.Serialize(uploadResponse);
+
+			string? capturedUri = null;
+			var handler = new MockHttpHandler(request =>
+			{
+				capturedUri = request.RequestUri?.ToString();
+				return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(json) };
+			});
+
+			var client = createClient(handler);
+			var result = await client.UploadFileAsync(tempFile);
+
+			Assert.Equal("analysis-123", result);
+			Assert.Contains("files", capturedUri);
+			Assert.DoesNotContain("upload_url", capturedUri!);
+		}
+		finally
+		{
+			File.Delete(tempFile);
+		}
+	}
+
+	[Fact]
+	public async Task GetAnalysisAsync_Completed_ReturnsReport()
+	{
+		var analysisResponse = new VirusTotalAnalysisResponse
+		{
+			Data = new VtAnalysisData
+			{
+				Attributes = new VtAnalysisAttributes
+				{
+					Status = "completed",
+					Stats = new VtAnalysisStats
+					{
+						Malicious = 2,
+						Suspicious = 0,
+						Undetected = 60,
+						Harmless = 8
+					},
+					Results = new Dictionary<string, VtEngineResult>
+					{
+						["EngineA"] = new() { Category = "malicious", EngineName = "EngineA", Result = "Trojan.Gen" },
+						["EngineB"] = new() { Category = "malicious", EngineName = "EngineB", Result = "Malware.X" },
+						["EngineC"] = new() { Category = "undetected", EngineName = "EngineC", Result = null }
+					}
+				}
+			}
+		};
+
+		var json = JsonSerializer.Serialize(analysisResponse);
+		var handler = new MockHttpHandler(new HttpResponseMessage(HttpStatusCode.OK)
+		{
+			Content = new StringContent(json)
+		});
+
+		var client = createClient(handler);
+		var result = await client.GetAnalysisAsync("analysis-123");
+
+		Assert.NotNull(result);
+		Assert.Equal(70, result!.TotalEngines);
+		Assert.Equal(2, result.Detections);
+		Assert.Contains("EngineA: Trojan.Gen", result.Threats);
+		Assert.Contains("EngineB: Malware.X", result.Threats);
+	}
+
+	[Fact]
+	public async Task GetAnalysisAsync_Queued_ReturnsNull()
+	{
+		var analysisResponse = new VirusTotalAnalysisResponse
+		{
+			Data = new VtAnalysisData
+			{
+				Attributes = new VtAnalysisAttributes
+				{
+					Status = "queued"
+				}
+			}
+		};
+
+		var json = JsonSerializer.Serialize(analysisResponse);
+		var handler = new MockHttpHandler(new HttpResponseMessage(HttpStatusCode.OK)
+		{
+			Content = new StringContent(json)
+		});
+
+		var client = createClient(handler);
+		var result = await client.GetAnalysisAsync("analysis-123");
+
+		Assert.Null(result);
+	}
+
+	[Fact]
+	public async Task GetAnalysisAsync_InProgress_ReturnsNull()
+	{
+		var analysisResponse = new VirusTotalAnalysisResponse
+		{
+			Data = new VtAnalysisData
+			{
+				Attributes = new VtAnalysisAttributes
+				{
+					Status = "in-progress"
+				}
+			}
+		};
+
+		var json = JsonSerializer.Serialize(analysisResponse);
+		var handler = new MockHttpHandler(new HttpResponseMessage(HttpStatusCode.OK)
+		{
+			Content = new StringContent(json)
+		});
+
+		var client = createClient(handler);
+		var result = await client.GetAnalysisAsync("analysis-123");
+
+		Assert.Null(result);
+	}
+
 	private sealed class MockHttpHandler : HttpMessageHandler
 	{
-		private readonly Func<HttpResponseMessage> _responseFactory;
+		private readonly Func<HttpRequestMessage, HttpResponseMessage> _requestHandler;
 
 		public MockHttpHandler(HttpResponseMessage response)
-			: this(() => response) { }
+			: this(_ => response) { }
 
 		public MockHttpHandler(Func<HttpResponseMessage> responseFactory)
+			: this(_ => responseFactory()) { }
+
+		public MockHttpHandler(Func<HttpRequestMessage, HttpResponseMessage> requestHandler)
 		{
-			_responseFactory = responseFactory;
+			_requestHandler = requestHandler;
 		}
 
 		protected override Task<HttpResponseMessage> SendAsync(
 			HttpRequestMessage request, CancellationToken cancellationToken)
 		{
-			return Task.FromResult(_responseFactory());
+			return Task.FromResult(_requestHandler(request));
 		}
 	}
 }

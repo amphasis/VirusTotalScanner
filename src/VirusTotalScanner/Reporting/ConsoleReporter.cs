@@ -55,4 +55,42 @@ internal sealed class ConsoleReporter : IConsoleReporter
 		Console.WriteLine();
 		Console.WriteLine($"Scan complete: {total} files scanned, {withDetections} with detections.");
 	}
+
+	public void ReportUploading(string fileName)
+	{
+		Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
+		var prevColor = Console.ForegroundColor;
+		Console.ForegroundColor = ConsoleColor.Cyan;
+		Console.Write($"[UPLOADING] {fileName}");
+		Console.ForegroundColor = prevColor;
+	}
+
+	public void ReportUploaded(string fileName)
+	{
+		Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
+		var prevColor = Console.ForegroundColor;
+		Console.ForegroundColor = ConsoleColor.Cyan;
+		Console.WriteLine($"[UPLOADED] {fileName}");
+		Console.ForegroundColor = prevColor;
+	}
+
+	public void ReportPollingStart(int pendingCount)
+	{
+		Console.WriteLine();
+		Console.WriteLine($"Waiting for {pendingCount} analyses to complete...");
+	}
+
+	public void ReportPollingProgress(int completed, int total, int round)
+	{
+		Console.Write($"\r[POLLING round {round}] {completed}/{total} analyses complete".PadRight(Console.WindowWidth - 1));
+	}
+
+	public void ReportAnalysisTimeout(string fileName)
+	{
+		Console.Write("\r" + new string(' ', Console.WindowWidth - 1) + "\r");
+		var prevColor = Console.ForegroundColor;
+		Console.ForegroundColor = ConsoleColor.Yellow;
+		Console.WriteLine($"[TIMEOUT] {fileName} - analysis did not complete");
+		Console.ForegroundColor = prevColor;
+	}
 }
