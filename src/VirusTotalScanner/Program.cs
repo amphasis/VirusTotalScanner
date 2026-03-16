@@ -55,6 +55,7 @@ static async Task<int> runAsync(Options opts)
 		Directory.CreateDirectory(cacheDir);
 		return new LiteDatabase(Path.Combine(cacheDir, "cache.db"));
 	});
+	services.AddSingleton<IFileHashCacheRepository, FileHashCacheRepository>();
 	services.AddSingleton<IVirusTotalCacheRepository, VirusTotalCacheRepository>();
 	services.AddSingleton<IVirusTotalService, VirusTotalService>();
 	services.AddSingleton<IScanOrchestrator, ScanOrchestrator>();
