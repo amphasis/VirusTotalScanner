@@ -1,4 +1,4 @@
-using VirusTotalScanner.Models;
+﻿using VirusTotalScanner.Models;
 using VirusTotalScanner.Reporting;
 
 namespace VirusTotalScanner.Services;
@@ -10,20 +10,20 @@ internal sealed class ScanOrchestrator : IScanOrchestrator
 	private readonly IFileEnumerator _fileEnumerator;
 	private readonly IFilePrioritizer _filePrioritizer;
 	private readonly IFileHasher _fileHasher;
-	private readonly IVirusTotalClient _vtClient;
+	private readonly IVirusTotalService _vtService;
 	private readonly IConsoleReporter _reporter;
 
 	public ScanOrchestrator(
 		IFileEnumerator fileEnumerator,
 		IFilePrioritizer filePrioritizer,
 		IFileHasher fileHasher,
-		IVirusTotalClient vtClient,
+		IVirusTotalService vtService,
 		IConsoleReporter reporter)
 	{
 		_fileEnumerator = fileEnumerator;
 		_filePrioritizer = filePrioritizer;
 		_fileHasher = fileHasher;
-		_vtClient = vtClient;
+		_vtService = vtService;
 		_reporter = reporter;
 	}
 
@@ -55,7 +55,7 @@ internal sealed class ScanOrchestrator : IScanOrchestrator
 
 				var hash = await _fileHasher.ComputeSha256Async(filePath);
 
-				var result = await _vtClient.GetFileReportAsync(hash);
+				var result = await _vtService.GetFileReportAsync(hash);
 
 				if (result == null)
 				{

@@ -1,4 +1,4 @@
-using Moq;
+﻿using Moq;
 using VirusTotalScanner.Models;
 using VirusTotalScanner.Reporting;
 using VirusTotalScanner.Services;
@@ -10,7 +10,7 @@ public sealed class ScanOrchestratorTests : IDisposable
 	private readonly Mock<IFileEnumerator> _fileEnumerator = new();
 	private readonly Mock<IFilePrioritizer> _filePrioritizer = new();
 	private readonly Mock<IFileHasher> _fileHasher = new();
-	private readonly Mock<IVirusTotalClient> _vtClient = new();
+	private readonly Mock<IVirusTotalService> _vtService = new();
 	private readonly Mock<IConsoleReporter> _reporter = new();
 	private readonly ScanOrchestrator _orchestrator;
 	private readonly string _tempDir;
@@ -25,7 +25,7 @@ public sealed class ScanOrchestratorTests : IDisposable
 			_fileEnumerator.Object,
 			_filePrioritizer.Object,
 			_fileHasher.Object,
-			_vtClient.Object,
+			_vtService.Object,
 			_reporter.Object);
 
 		_tempDir = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString());
@@ -56,21 +56,21 @@ public sealed class ScanOrchestratorTests : IDisposable
 		_fileHasher.Setup(h => h.ComputeSha256Async(file2)).ReturnsAsync("hash2");
 		_fileHasher.Setup(h => h.ComputeSha256Async(file3)).ReturnsAsync("hash3");
 
-		_vtClient.Setup(c => c.GetFileReportAsync("hash1")).ReturnsAsync(new FileScanResult
+		_vtService.Setup(c => c.GetFileReportAsync("hash1")).ReturnsAsync(new FileScanResult
 		{
 			SHA256 = "hash1",
 			TotalEngines = 70,
 			Detections = 5,
 			Threats = "Engine1: Trojan.Gen"
 		});
-		_vtClient.Setup(c => c.GetFileReportAsync("hash2")).ReturnsAsync(new FileScanResult
+		_vtService.Setup(c => c.GetFileReportAsync("hash2")).ReturnsAsync(new FileScanResult
 		{
 			SHA256 = "hash2",
 			TotalEngines = 70,
 			Detections = 0,
 			Threats = ""
 		});
-		_vtClient.Setup(c => c.GetFileReportAsync("hash3")).ReturnsAsync((FileScanResult?)null);
+		_vtService.Setup(c => c.GetFileReportAsync("hash3")).ReturnsAsync((FileScanResult?)null);
 
 		// Act
 		var results = await _orchestrator.ScanAsync("testdir");
@@ -108,7 +108,7 @@ public sealed class ScanOrchestratorTests : IDisposable
 		Assert.Equal(string.Empty, results[0].SHA256);
 
 		_fileHasher.Verify(h => h.ComputeSha256Async(It.IsAny<string>()), Times.Never);
-		_vtClient.Verify(c => c.GetFileReportAsync(It.IsAny<string>()), Times.Never);
+		_vtService.Verify(c => c.GetFileReportAsync(It.IsAny<string>()), Times.Never);
 		_reporter.Verify(r => r.ReportSkipped(
 			"large.bin",
 			"file exceeds 650 MB VirusTotal limit"), Times.Once);
@@ -130,7 +130,7 @@ public sealed class ScanOrchestratorTests : IDisposable
 
 		_fileHasher.Setup(h => h.ComputeSha256Async(file1)).ReturnsAsync("hash1");
 
-		_vtClient.Setup(c => c.GetFileReportAsync("hash1"))
+		_vtService.Setup(c => c.GetFileReportAsync("hash1"))
 			.ThrowsAsync(new QuotaExceededException("VirusTotal daily quota exceeded"));
 
 		var results = await _orchestrator.ScanAsync("testdir");
@@ -143,7 +143,7 @@ public sealed class ScanOrchestratorTests : IDisposable
 
 		_fileHasher.Verify(h => h.ComputeSha256Async(file2), Times.Never);
 		_fileHasher.Verify(h => h.ComputeSha256Async(file3), Times.Never);
-		_vtClient.Verify(c => c.GetFileReportAsync("hash1"), Times.Once);
+		_vtService.Verify(c => c.GetFileReportAsync("hash1"), Times.Once);
 		_reporter.Verify(r => r.ReportError(It.Is<string>(s => s.Contains("daily quota exceeded"))), Times.Once);
 		_reporter.Verify(r => r.ReportComplete(3, 0), Times.Once);
 	}

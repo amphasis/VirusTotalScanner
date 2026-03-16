@@ -1,7 +1,9 @@
 ﻿using CommandLine;
+using LiteDB;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using VirusTotalScanner;
+using VirusTotalScanner.Cache;
 using VirusTotalScanner.Reporting;
 using VirusTotalScanner.Services;
 
@@ -45,6 +47,16 @@ static async Task<int> runAsync(Options opts)
 	services.AddSingleton<IConsoleReporter, ConsoleReporter>();
 	services.AddSingleton<ICsvExporter, CsvExporter>();
 	services.AddSingleton<IVirusTotalClient, VirusTotalClient>();
+	services.AddSingleton<ILiteDatabase>(_ =>
+	{
+		var cacheDir = Path.Combine(
+			Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+			"VirusTotalScanner");
+		Directory.CreateDirectory(cacheDir);
+		return new LiteDatabase(Path.Combine(cacheDir, "cache.db"));
+	});
+	services.AddSingleton<IVirusTotalCacheRepository, VirusTotalCacheRepository>();
+	services.AddSingleton<IVirusTotalService, VirusTotalService>();
 	services.AddSingleton<IScanOrchestrator, ScanOrchestrator>();
 
 	services.AddSingleton(_ =>
