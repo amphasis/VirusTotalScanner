@@ -42,6 +42,7 @@ internal sealed class ScanOrchestrator : IScanOrchestrator
 		var files = _filePrioritizer.Prioritize(_fileEnumerator.EnumerateFiles(path));
 		var results = new List<FileScanResult>();
 		var pendingFiles = new List<PendingAnalysisEntry>();
+		var quotaExceeded = false;
 
 		for (int i = 0; i < files.Count; i++)
 		{
@@ -88,6 +89,12 @@ internal sealed class ScanOrchestrator : IScanOrchestrator
 					continue;
 				}
 
+				if (quotaExceeded)
+				{
+					addQuotaSkippedResult(filePath, fileInfo, hash, results);
+					continue;
+				}
+
 				var pendingEntry = handleNotFound(filePath, fileInfo, hash, pendingFiles);
 				if (pendingEntry != null)
 					await handlePendingAnalysis(filePath, fileInfo, hash, pendingEntry, results, pendingFiles);
@@ -106,21 +113,11 @@ internal sealed class ScanOrchestrator : IScanOrchestrator
 			}
 			catch (QuotaExceededException)
 			{
-				_reporter.ReportError("VirusTotal daily quota exceeded, skipping remaining files");
+				quotaExceeded = true;
+				_reporter.ReportError("VirusTotal daily quota exceeded, continuing with cached results");
 
-				for (int j = i; j < files.Count; j++)
-				{
-					var skippedPath = files[j];
-					var skippedInfo = new FileInfo(skippedPath);
-					results.Add(new FileScanResult
-					{
-						FullPath = skippedPath,
-						SizeBytes = skippedInfo.Exists ? skippedInfo.Length : 0,
-						Threats = "Skipped: VirusTotal daily quota exceeded"
-					});
-				}
-
-				break;
+				var fileInfo = new FileInfo(filePath);
+				addQuotaSkippedResult(filePath, fileInfo, null, results);
 			}
 		}
 
@@ -218,6 +215,19 @@ internal sealed class ScanOrchestrator : IScanOrchestrator
 			});
 			_reporter.ReportError($"Upload failed for {fileName}: {ex.Message}");
 		}
+	}
+
+	private void addQuotaSkippedResult(string filePath, FileInfo fileInfo, string? hash,
+		List<FileScanResult> results)
+	{
+		results.Add(new FileScanResult
+		{
+			FullPath = filePath,
+			SizeBytes = fileInfo.Exists ? fileInfo.Length : 0,
+			SHA256 = hash ?? string.Empty,
+			Threats = "Skipped: VirusTotal daily quota exceeded"
+		});
+		_reporter.ReportSkipped(Path.GetFileName(filePath), "VirusTotal daily quota exceeded");
 	}
 
 	private void addNotFoundResult(string filePath, FileInfo fileInfo, string hash,

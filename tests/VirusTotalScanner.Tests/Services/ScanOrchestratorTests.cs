@@ -221,7 +221,7 @@ public sealed class ScanOrchestratorTests : IDisposable
 	}
 
 	[Fact]
-	public async Task ScanAsync_QuotaExceeded_SkipsRemainingFiles()
+	public async Task ScanAsync_QuotaExceeded_ContinuesWithCachedResults()
 	{
 		var file1 = Path.Combine(_tempDir, "file1.exe");
 		var file2 = Path.Combine(_tempDir, "file2.dll");
@@ -234,24 +234,40 @@ public sealed class ScanOrchestratorTests : IDisposable
 		_fileEnumerator.Setup(f => f.EnumerateFiles("testdir")).Returns(files);
 
 		_fileHasher.Setup(h => h.ComputeSha256Async(file1)).ReturnsAsync("hash1");
+		_fileHasher.Setup(h => h.ComputeSha256Async(file2)).ReturnsAsync("hash2");
+		_fileHasher.Setup(h => h.ComputeSha256Async(file3)).ReturnsAsync("hash3");
 
+		// file1: quota exceeded on API call
 		_vtService.Setup(c => c.GetFileReportAsync("hash1"))
 			.ThrowsAsync(new QuotaExceededException("VirusTotal daily quota exceeded"));
+
+		// file2: cached result available
+		_vtService.Setup(c => c.GetFileReportAsync("hash2")).ReturnsAsync(new VirusTotalReport
+		{
+			SHA256 = "hash2",
+			TotalEngines = 70,
+			Detections = 2,
+			Threats = "Engine1: Trojan.Gen"
+		});
+
+		// file3: cache miss → report is null → skipped because quota exceeded
+		_vtService.Setup(c => c.GetFileReportAsync("hash3")).ReturnsAsync((VirusTotalReport?)null);
 
 		var orchestrator = createOrchestrator();
 		var results = await orchestrator.ScanAsync("testdir");
 
 		Assert.Equal(3, results.Count);
-		Assert.All(results, r => Assert.Equal("Skipped: VirusTotal daily quota exceeded", r.Threats));
-		Assert.Equal(file1, results[0].FullPath);
-		Assert.Equal(file2, results[1].FullPath);
-		Assert.Equal(file3, results[2].FullPath);
+		// file1: skipped due to quota
+		Assert.Equal("Skipped: VirusTotal daily quota exceeded", results[0].Threats);
+		// file2: served from cache despite quota
+		Assert.True(results[1].HasDetections);
+		Assert.Equal("hash2", results[1].SHA256);
+		// file3: cache miss, skipped due to quota
+		Assert.Equal("Skipped: VirusTotal daily quota exceeded", results[2].Threats);
 
-		_fileHasher.Verify(h => h.ComputeSha256Async(file2), Times.Never);
-		_fileHasher.Verify(h => h.ComputeSha256Async(file3), Times.Never);
-		_vtService.Verify(c => c.GetFileReportAsync("hash1"), Times.Once);
 		_reporter.Verify(r => r.ReportError(It.Is<string>(s => s.Contains("daily quota exceeded"))), Times.Once);
-		_reporter.Verify(r => r.ReportComplete(3, 0), Times.Once);
+		_reporter.Verify(r => r.ReportDetection(It.IsAny<FileScanResult>()), Times.Once);
+		_reporter.Verify(r => r.ReportComplete(3, 1), Times.Once);
 	}
 
 	[Fact]
