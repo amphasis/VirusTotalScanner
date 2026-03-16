@@ -18,7 +18,7 @@ internal sealed class VirusTotalService : IVirusTotalService
 		_vtClient = vtClient;
 	}
 
-	public async Task<FileScanResult?> GetFileReportAsync(string sha256)
+	public async Task<VirusTotalReport?> GetFileReportAsync(string sha256)
 	{
 		var cached = _cacheRepository.FindByHash(sha256);
 
@@ -39,12 +39,12 @@ internal sealed class VirusTotalService : IVirusTotalService
 		return DateTime.UtcNow - entry.CreatedAt > ttl;
 	}
 
-	private static FileScanResult? mapFromCache(VirusTotalCacheEntry entry)
+	private static VirusTotalReport? mapFromCache(VirusTotalCacheEntry entry)
 	{
 		if (entry.NotInDatabase)
 			return null;
 
-		return new FileScanResult
+		return new VirusTotalReport
 		{
 			SHA256 = entry.SHA256,
 			TotalEngines = entry.TotalEngines,
@@ -53,7 +53,7 @@ internal sealed class VirusTotalService : IVirusTotalService
 		};
 	}
 
-	private void saveToCache(string sha256, FileScanResult? result)
+	private void saveToCache(string sha256, VirusTotalReport? result)
 	{
 		var entry = new VirusTotalCacheEntry
 		{

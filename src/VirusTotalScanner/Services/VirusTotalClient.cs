@@ -16,7 +16,7 @@ internal sealed class VirusTotalClient : IVirusTotalClient
 		_rateLimitRetryDelay = rateLimitRetryDelay ?? TimeSpan.FromSeconds(15);
 	}
 
-	public async Task<FileScanResult?> GetFileReportAsync(string sha256)
+	public async Task<VirusTotalReport?> GetFileReportAsync(string sha256)
 	{
 		for (int attempt = 0; attempt <= MaxRetries; attempt++)
 		{
@@ -69,7 +69,7 @@ internal sealed class VirusTotalClient : IVirusTotalClient
 		}
 	}
 
-	private static FileScanResult mapToResult(string sha256, VirusTotalResponse? vtResponse)
+	private static VirusTotalReport mapToResult(string sha256, VirusTotalResponse? vtResponse)
 	{
 		var stats = vtResponse?.Data?.Attributes?.LastAnalysisStats;
 		var results = vtResponse?.Data?.Attributes?.LastAnalysisResults;
@@ -97,7 +97,7 @@ internal sealed class VirusTotalClient : IVirusTotalClient
 			}
 		}
 
-		return new FileScanResult
+		return new VirusTotalReport
 		{
 			SHA256 = sha256,
 			TotalEngines = totalEngines,

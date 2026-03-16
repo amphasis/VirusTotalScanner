@@ -56,21 +56,21 @@ public sealed class ScanOrchestratorTests : IDisposable
 		_fileHasher.Setup(h => h.ComputeSha256Async(file2)).ReturnsAsync("hash2");
 		_fileHasher.Setup(h => h.ComputeSha256Async(file3)).ReturnsAsync("hash3");
 
-		_vtService.Setup(c => c.GetFileReportAsync("hash1")).ReturnsAsync(new FileScanResult
+		_vtService.Setup(c => c.GetFileReportAsync("hash1")).ReturnsAsync(new VirusTotalReport
 		{
 			SHA256 = "hash1",
 			TotalEngines = 70,
 			Detections = 5,
 			Threats = "Engine1: Trojan.Gen"
 		});
-		_vtService.Setup(c => c.GetFileReportAsync("hash2")).ReturnsAsync(new FileScanResult
+		_vtService.Setup(c => c.GetFileReportAsync("hash2")).ReturnsAsync(new VirusTotalReport
 		{
 			SHA256 = "hash2",
 			TotalEngines = 70,
 			Detections = 0,
 			Threats = ""
 		});
-		_vtService.Setup(c => c.GetFileReportAsync("hash3")).ReturnsAsync((FileScanResult?)null);
+		_vtService.Setup(c => c.GetFileReportAsync("hash3")).ReturnsAsync((VirusTotalReport?)null);
 
 		// Act
 		var results = await _orchestrator.ScanAsync("testdir");

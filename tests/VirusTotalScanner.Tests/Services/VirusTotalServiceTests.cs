@@ -51,7 +51,7 @@ public sealed class VirusTotalServiceTests
 			NotInDatabase = false
 		};
 		_cacheRepository.Setup(r => r.FindByHash("hash1")).Returns(cached);
-		_vtClient.Setup(c => c.GetFileReportAsync("hash1")).ReturnsAsync(new FileScanResult
+		_vtClient.Setup(c => c.GetFileReportAsync("hash1")).ReturnsAsync(new VirusTotalReport
 		{
 			SHA256 = "hash1",
 			TotalEngines = 72,
@@ -71,7 +71,7 @@ public sealed class VirusTotalServiceTests
 	public async Task GetFileReportAsync_CacheMiss_CallsApi_SavesResult()
 	{
 		_cacheRepository.Setup(r => r.FindByHash("hash1")).Returns((VirusTotalCacheEntry?)null);
-		_vtClient.Setup(c => c.GetFileReportAsync("hash1")).ReturnsAsync(new FileScanResult
+		_vtClient.Setup(c => c.GetFileReportAsync("hash1")).ReturnsAsync(new VirusTotalReport
 		{
 			SHA256 = "hash1",
 			TotalEngines = 70,
@@ -108,7 +108,7 @@ public sealed class VirusTotalServiceTests
 
 		// After 1 day it should expire
 		cached.CreatedAt = DateTime.UtcNow.AddDays(-2);
-		_vtClient.Setup(c => c.GetFileReportAsync("hash1")).ReturnsAsync((FileScanResult?)null);
+		_vtClient.Setup(c => c.GetFileReportAsync("hash1")).ReturnsAsync((VirusTotalReport?)null);
 
 		result = await _service.GetFileReportAsync("hash1");
 
@@ -157,7 +157,7 @@ public sealed class VirusTotalServiceTests
 
 		// After 7 days it should expire
 		cached.CreatedAt = DateTime.UtcNow.AddDays(-8);
-		_vtClient.Setup(c => c.GetFileReportAsync("hash1")).ReturnsAsync(new FileScanResult
+		_vtClient.Setup(c => c.GetFileReportAsync("hash1")).ReturnsAsync(new VirusTotalReport
 		{
 			SHA256 = "hash1",
 			TotalEngines = 72,

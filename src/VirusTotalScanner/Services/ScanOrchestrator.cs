@@ -55,11 +55,13 @@ internal sealed class ScanOrchestrator : IScanOrchestrator
 
 				var hash = await _fileHasher.ComputeSha256Async(filePath);
 
-				var result = await _vtService.GetFileReportAsync(hash);
+				var report = await _vtService.GetFileReportAsync(hash);
 
-				if (result == null)
+				FileScanResult scanResult;
+
+				if (report == null)
 				{
-					result = new FileScanResult
+					scanResult = new FileScanResult
 					{
 						FullPath = filePath,
 						SizeBytes = fileInfo.Length,
@@ -70,16 +72,23 @@ internal sealed class ScanOrchestrator : IScanOrchestrator
 				}
 				else
 				{
-					result.FullPath = filePath;
-					result.SizeBytes = fileInfo.Length;
+					scanResult = new FileScanResult
+					{
+						FullPath = filePath,
+						SizeBytes = fileInfo.Length,
+						SHA256 = report.SHA256,
+						TotalEngines = report.TotalEngines,
+						Detections = report.Detections,
+						Threats = report.Threats
+					};
 
-					if (result.HasDetections)
-						_reporter.ReportDetection(result);
+					if (scanResult.HasDetections)
+						_reporter.ReportDetection(scanResult);
 					else
-						_reporter.ReportClean(result);
+						_reporter.ReportClean(scanResult);
 				}
 
-				results.Add(result);
+				results.Add(scanResult);
 			}
 			catch (UnauthorizedAccessException)
 			{

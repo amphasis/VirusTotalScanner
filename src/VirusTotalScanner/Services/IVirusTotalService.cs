@@ -4,5 +4,5 @@ namespace VirusTotalScanner.Services;
 
 public interface IVirusTotalService
 {
-	Task<FileScanResult?> GetFileReportAsync(string sha256);
+	Task<VirusTotalReport?> GetFileReportAsync(string sha256);
 }
