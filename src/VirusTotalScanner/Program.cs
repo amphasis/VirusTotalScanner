@@ -66,7 +66,8 @@ static async Task<int> runAsync(Options opts)
 	{
 		var httpClient = new HttpClient
 		{
-			BaseAddress = new Uri("https://www.virustotal.com/api/v3/")
+			BaseAddress = new Uri("https://www.virustotal.com/api/v3/"),
+			Timeout = TimeSpan.FromMinutes(15)
 		};
 		httpClient.DefaultRequestHeaders.Add("x-apikey", apiKey);
 		return httpClient;

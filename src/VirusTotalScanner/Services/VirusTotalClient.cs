@@ -40,12 +40,14 @@ internal sealed class VirusTotalClient : IVirusTotalClient
 	public async Task<string> UploadFileAsync(string filePath)
 	{
 		var fileInfo = new FileInfo(filePath);
-		var uploadUrl = fileInfo.Length > LargeFileThreshold
-			? await getLargeFileUploadUrl()
-			: null;
+		var isLargeFile = fileInfo.Length > LargeFileThreshold;
 
 		return await executeWithRetry(async () =>
 		{
+			var uploadUrl = isLargeFile
+				? await getLargeFileUploadUrl()
+				: null;
+
 			using var fileStream = File.OpenRead(filePath);
 			using var content = new MultipartFormDataContent();
 			content.Add(new StreamContent(fileStream), "file", Path.GetFileName(filePath));
