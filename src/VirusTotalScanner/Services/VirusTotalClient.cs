@@ -1,4 +1,6 @@
-using System.Net;
+﻿using System.Net;
+using System.Net.Http.Headers;
+using System.Text;
 using System.Text.Json;
 using VirusTotalScanner.Models;
 
@@ -27,7 +29,7 @@ internal sealed class VirusTotalClient : IVirusTotalClient
 				return null;
 
 			await handleRateLimit(response);
-			response.EnsureSuccessStatusCode();
+			await ensureSuccess(response);
 
 			var json = await response.Content.ReadAsStringAsync();
 			var vtResponse = JsonSerializer.Deserialize<VirusTotalResponse>(json);
@@ -48,16 +50,14 @@ internal sealed class VirusTotalClient : IVirusTotalClient
 				? await getLargeFileUploadUrl()
 				: null;
 
-			using var fileStream = File.OpenRead(filePath);
-			using var content = new MultipartFormDataContent();
-			content.Add(new StreamContent(fileStream), "file", Path.GetFileName(filePath));
+			using var content = new FileUploadContent(filePath);
 
 			var response = uploadUrl != null
 				? await _httpClient.PostAsync(uploadUrl, content)
 				: await _httpClient.PostAsync("files", content);
 
 			await handleRateLimit(response);
-			response.EnsureSuccessStatusCode();
+			await ensureSuccess(response);
 
 			var json = await response.Content.ReadAsStringAsync();
 			var uploadResponse = JsonSerializer.Deserialize<VirusTotalUploadResponse>(json);
@@ -74,7 +74,7 @@ internal sealed class VirusTotalClient : IVirusTotalClient
 			var response = await _httpClient.GetAsync($"analyses/{analysisId}");
 
 			await handleRateLimit(response);
-			response.EnsureSuccessStatusCode();
+			await ensureSuccess(response);
 
 			var json = await response.Content.ReadAsStringAsync();
 			var analysisResponse = JsonSerializer.Deserialize<VirusTotalAnalysisResponse>(json);
@@ -94,7 +94,7 @@ internal sealed class VirusTotalClient : IVirusTotalClient
 			var response = await _httpClient.GetAsync("files/upload_url");
 
 			await handleRateLimit(response);
-			response.EnsureSuccessStatusCode();
+			await ensureSuccess(response);
 
 			var json = await response.Content.ReadAsStringAsync();
 			var urlResponse = JsonSerializer.Deserialize<JsonElement>(json);
@@ -137,6 +137,17 @@ internal sealed class VirusTotalClient : IVirusTotalClient
 		}
 
 		throw new HttpRequestException($"Failed to {operationDescription} after {MaxRetries} retries");
+	}
+
+	private static async Task ensureSuccess(HttpResponseMessage response)
+	{
+		if (response.IsSuccessStatusCode)
+			return;
+
+		var body = await response.Content.ReadAsStringAsync();
+		throw new HttpRequestException(
+			$"Response status code does not indicate success: {(int)response.StatusCode} ({response.ReasonPhrase}). " +
+			$"Response: {body}");
 	}
 
 	private static async Task<string?> parseErrorCode(HttpResponseMessage response)
@@ -189,4 +200,42 @@ internal sealed class VirusTotalClient : IVirusTotalClient
 	}
 
 	private sealed class RateLimitException : Exception;
+
+	private sealed class FileUploadContent : HttpContent
+	{
+		private readonly string _filePath;
+		private readonly string _boundary;
+
+		public FileUploadContent(string filePath)
+		{
+			_filePath = filePath;
+			_boundary = Guid.NewGuid().ToString("N");
+			Headers.ContentType = MediaTypeHeaderValue.Parse($"multipart/form-data; boundary={_boundary}");
+		}
+
+		protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+		{
+			var fileName = Path.GetFileName(_filePath);
+			var preamble = Encoding.UTF8.GetBytes(
+				$"--{_boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{fileName}\"\r\nContent-Type: application/octet-stream\r\n\r\n");
+			var epilogue = Encoding.UTF8.GetBytes($"\r\n--{_boundary}--\r\n");
+
+			await stream.WriteAsync(preamble);
+			await using var fileStream = File.OpenRead(_filePath);
+			await fileStream.CopyToAsync(stream);
+			await stream.WriteAsync(epilogue);
+		}
+
+		protected override bool TryComputeLength(out long length)
+		{
+			var fileName = Path.GetFileName(_filePath);
+			var preamble = $"--{_boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"{fileName}\"\r\nContent-Type: application/octet-stream\r\n\r\n";
+			var epilogue = $"\r\n--{_boundary}--\r\n";
+
+			length = Encoding.UTF8.GetByteCount(preamble)
+				+ new FileInfo(_filePath).Length
+				+ Encoding.UTF8.GetByteCount(epilogue);
+			return true;
+		}
+	}
 }
